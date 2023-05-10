@@ -1,0 +1,32 @@
+{
+  "display": {
+    "notifications": true,
+    "offendingContent": true,
+    "rulesSummary": false,
+    "shortStats": true,
+    "verbose": false
+  },
+  "rules": [
+    {
+      "filter": "\\.js$",
+      "nonBlocking": "true",
+      "message": "You’ve got leftover `console.log`",
+      "regex": "console\\.log"
+    },
+    {
+      "message": "You’ve got leftover conflict markers",
+      "regex": "/^[<>|=]{4,}/m"
+    },
+    {
+      "message": "You have unfinished devs",
+      "nonBlocking": "true",
+      "regex": "(?:FIXME|TODO)"
+    },
+    {
+      "filter": "^package\\.json$",
+      "message": "You have unfinished devs",
+      "nonBlocking": "true",
+      "regex": "(?:FIXME|TODO)"
+    }
+  ]
+}
