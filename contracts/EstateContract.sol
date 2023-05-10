@@ -7,15 +7,23 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/common/ERC2981.sol";
 
 import "./extensions/ERC4907.sol";
 
-contract EstateContract is ERC4907, ERC721Enumerable, ERC721URIStorage, Pausable, Ownable, ERC721Burnable {
+contract EstateContract is ERC4907, ERC721Enumerable, ERC721URIStorage, ERC2981, Pausable, Ownable, ERC721Burnable {
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdCounter;
 
-    constructor(string memory name_, string memory symbol_) ERC4907(name_, symbol_) {}
+    constructor(
+        string memory name_,
+        string memory symbol_,
+        address _royaltyRecipient,
+        uint96 _royaltyBps
+    ) ERC4907(name_, symbol_) {
+        _setDefaultRoyalty(_royaltyRecipient, _royaltyBps);
+    }
 
     function pause() public onlyOwner {
         _pause();
@@ -45,6 +53,7 @@ contract EstateContract is ERC4907, ERC721Enumerable, ERC721URIStorage, Pausable
 
     function _burn(uint256 _tokenId) internal override(ERC721, ERC721URIStorage) {
         super._burn(_tokenId);
+        _resetTokenRoyalty(_tokenId);
     }
 
     function tokenURI(uint256 _tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
@@ -57,7 +66,7 @@ contract EstateContract is ERC4907, ERC721Enumerable, ERC721URIStorage, Pausable
 
     function supportsInterface(
         bytes4 interfaceId
-    ) public view override(ERC721, ERC4907, ERC721Enumerable) returns (bool) {
+    ) public view override(ERC721, ERC4907, ERC2981, ERC721Enumerable) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
