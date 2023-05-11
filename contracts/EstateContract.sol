@@ -34,9 +34,13 @@ contract EstateContract is
 
     bytes32 private constant NFT_SALE_TYPE_HASH = keccak256("NFTForSale(address lister,uint256 price,string uri)");
 
+    bytes32 private constant NFT_RENT_MINT_TYPE_HASH =
+        keccak256(
+            "NFTForRentWithMint(address lister,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration,string uri)"
+        );
     bytes32 private constant NFT_RENT_TYPE_HASH =
         keccak256(
-            "NFTForRent(address lister,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration,string uri)"
+            "NFTForRent(address lister,uint256 tokenId,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration)"
         );
 
     constructor(
@@ -67,16 +71,12 @@ contract EstateContract is
         uint256 price,
         string memory uri,
         bytes calldata signature
-    ) external payable {
+    ) external payable whenNotPaused {
         require(lister != to, "Invalid address");
         require(_verify(lister, _hashNFTSale(lister, price, uri), signature), "Invalid signature");
         require(msg.value >= price, "Insufficient balance");
 
-        uint256 _tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment();
-
-        _safeMint(to, _tokenId);
-        _setTokenURI(_tokenId, uri);
+        uint256 _tokenId = _mintWithURI(to, uri);
 
         _transferWithRefund(lister, price);
 
@@ -86,6 +86,42 @@ contract EstateContract is
     function rent(
         address to,
         address lister,
+        uint256 _tokenId,
+        uint256 pricePerUnit,
+        uint64 timeUnit,
+        uint64 minDuration,
+        uint64 maxDuration,
+        uint64 rentDuration,
+        bytes calldata signature
+    ) external payable whenNotPaused {
+        require(lister != to, "Invalid address");
+        require(rentDuration >= minDuration && rentDuration <= maxDuration, "Invalid duration");
+        require(
+            _verify(
+                lister,
+                _hashNFTRent(lister, _tokenId, pricePerUnit, timeUnit, minDuration, maxDuration),
+                signature
+            ),
+            "Invalid signature"
+        );
+        require(userOf(_tokenId) == address(0), "TokenId already rent out");
+
+        string memory uri = tokenURI(_tokenId);
+        uint256 totalPrice = (pricePerUnit * rentDuration) / timeUnit;
+        require(msg.value >= totalPrice, "Insufficient balance");
+
+        // then, set user role to renter (user)
+        uint64 expiredAt = block.timestamp.toUint64() + rentDuration;
+        setUser(_tokenId, to, expiredAt);
+
+        _transferWithRefund(lister, totalPrice);
+
+        emit NFTRent(lister, to, expiredAt, totalPrice, _tokenId, uri);
+    }
+
+    function rentWithMint(
+        address to,
+        address lister,
         uint256 pricePerUnit,
         uint64 timeUnit,
         uint64 minDuration,
@@ -93,23 +129,23 @@ contract EstateContract is
         uint64 rentDuration,
         string memory uri,
         bytes calldata signature
-    ) external payable {
+    ) external payable whenNotPaused {
         require(lister != to, "Invalid address");
         require(rentDuration >= minDuration && rentDuration <= maxDuration, "Invalid duration");
         require(
-            _verify(lister, _hashNFTRent(lister, pricePerUnit, timeUnit, minDuration, maxDuration, uri), signature),
+            _verify(
+                lister,
+                _hashNFTRentWithMint(lister, pricePerUnit, timeUnit, minDuration, maxDuration, uri),
+                signature
+            ),
             "Invalid signature"
         );
 
         uint256 totalPrice = (pricePerUnit * rentDuration) / timeUnit;
         require(msg.value >= totalPrice, "Insufficient balance");
 
-        uint256 _tokenId = _tokenIdCounter.current();
-        _tokenIdCounter.increment();
-
         // first, mint NFT to lister (owner)
-        _safeMint(lister, _tokenId);
-        _setTokenURI(_tokenId, uri);
+        uint256 _tokenId = _mintWithURI(lister, uri);
 
         // then, set user role to renter (user)
         uint64 expiredAt = block.timestamp.toUint64() + rentDuration;
@@ -123,10 +159,34 @@ contract EstateContract is
     }
 
     function _hashNFTSale(address _lister, uint256 _price, string memory _uri) internal view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, _uri)));
+        return _hashTypedDataV4(keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, keccak256(bytes(_uri)))));
     }
 
     function _hashNFTRent(
+        address _lister,
+        uint256 _tokenId,
+        uint256 _pricePerUnit,
+        uint64 _timeUnit,
+        uint64 _minDuration,
+        uint64 _maxDuration
+    ) internal view returns (bytes32) {
+        return
+            _hashTypedDataV4(
+                keccak256(
+                    abi.encode(
+                        NFT_RENT_TYPE_HASH,
+                        _lister,
+                        _tokenId,
+                        _pricePerUnit,
+                        _timeUnit,
+                        _minDuration,
+                        _maxDuration
+                    )
+                )
+            );
+    }
+
+    function _hashNFTRentWithMint(
         address _lister,
         uint256 _pricePerUnit,
         uint64 _timeUnit,
@@ -137,13 +197,31 @@ contract EstateContract is
         return
             _hashTypedDataV4(
                 keccak256(
-                    abi.encode(NFT_RENT_TYPE_HASH, _lister, _pricePerUnit, _timeUnit, _minDuration, _maxDuration, _uri)
+                    abi.encode(
+                        NFT_RENT_MINT_TYPE_HASH,
+                        _lister,
+                        _pricePerUnit,
+                        _timeUnit,
+                        _minDuration,
+                        _maxDuration,
+                        keccak256(bytes(_uri))
+                    )
                 )
             );
     }
 
     function _verify(address signer, bytes32 digest, bytes memory signature) internal view returns (bool) {
         return SignatureChecker.isValidSignatureNow(signer, digest, signature);
+    }
+
+    function _mintWithURI(address to, string memory uri) internal returns (uint256) {
+        uint256 _tokenId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
+
+        _safeMint(to, _tokenId);
+        _setTokenURI(_tokenId, uri);
+
+        return _tokenId;
     }
 
     function _transferWithRefund(address to, uint256 amount) internal {
