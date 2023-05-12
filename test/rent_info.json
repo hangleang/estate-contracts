@@ -1,0 +1,42 @@
+[
+  {
+    "pricePerUnit": "1000",
+    "timeUnit": "3600",
+    "minDuration": "3600",
+    "maxDuration": "43200",
+    "rentDuration": "3600",
+    "uri": "https://example.com/0"
+  },
+  {
+    "pricePerUnit": "2000",
+    "timeUnit": "86400",
+    "minDuration": "86400",
+    "maxDuration": "259200",
+    "rentDuration": "86400",
+    "uri": "https://example.com/1"
+  },
+  {
+    "pricePerUnit": "3000",
+    "timeUnit": "604800",
+    "minDuration": "604800",
+    "maxDuration": "1209600",
+    "rentDuration": "604800",
+    "uri": "https://example.com/2"
+  },
+  {
+    "pricePerUnit": "4000",
+    "timeUnit": "2629800",
+    "minDuration": "2629800",
+    "maxDuration": "15778800",
+    "rentDuration": "2629800",
+    "uri": "https://example.com/3"
+  },
+  {
+    "pricePerUnit": "5000",
+    "timeUnit": "31557600",
+    "minDuration": "31557600",
+    "maxDuration": "157788000",
+    "rentDuration": "31557600",
+    "uri": "https://example.com/4"
+  }
+]

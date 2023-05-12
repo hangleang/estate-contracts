@@ -4,7 +4,7 @@ import { VERIFICATION_BLOCK_CONFIRMATIONS } from "../utils/constants";
 
 const func: DeployFunction = async ({ getNamedAccounts, deployments, network, run }) => {
   const { deploy, log } = deployments;
-  const { deployer } = await getNamedAccounts();
+  const { deployer, feeCollector } = await getNamedAccounts();
   const isDev = !network.live;
   const waitConfirmations = network.live ? VERIFICATION_BLOCK_CONFIRMATIONS : undefined;
 
@@ -14,9 +14,9 @@ const func: DeployFunction = async ({ getNamedAccounts, deployments, network, ru
     // set external contract address
   }
 
-  // the following will only deploy "Greeter" if the contract was never deployed or if the code changed since last deployment
-  const args = ["Hello, World!"];
-  const greeter = await deploy("Greeter", {
+  // the following will only deploy "EstateContract" if the contract was never deployed or if the code changed since last deployment
+  const args = ["Test Estate Contract", "TEC", "1.0.0", feeCollector, 500];
+  const estate = await deploy("EstateContract", {
     from: deployer,
     args,
     log: true,
@@ -28,12 +28,12 @@ const func: DeployFunction = async ({ getNamedAccounts, deployments, network, ru
   if (!isDev) {
     log("Verifying...");
     await run("verify:verify", {
-      address: greeter.address,
+      address: estate.address,
       constructorArguments: args,
     });
   }
 };
 
 export default func;
-func.tags = ["all", "Greeter"];
+func.tags = ["all", "EstateContract"];
 func.dependencies = []; // this contains dependencies tags need to execute before deploy this contract

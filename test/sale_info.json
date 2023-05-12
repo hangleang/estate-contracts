@@ -1,0 +1,22 @@
+[
+  {
+    "price": "1000",
+    "uri": "https://example.com/0"
+  },
+  {
+    "price": "2000",
+    "uri": "https://example.com/1"
+  },
+  {
+    "price": "3000",
+    "uri": "https://example.com/2"
+  },
+  {
+    "price": "4000",
+    "uri": "https://example.com/3"
+  },
+  {
+    "price": "5000",
+    "uri": "https://example.com/4"
+  }
+]

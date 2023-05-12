@@ -27,21 +27,31 @@ contract EstateContract is
     using Counters for Counters.Counter;
     using SafeCast for uint256;
 
-    event NFTSale(address lister, address buyer, uint256 price, uint256 tokenId, string uri);
-    event NFTRent(address lister, address renter, uint64 expiredAt, uint256 totalPrice, uint256 tokenId, string uri);
+    event NFTSale(address indexed lister, address indexed buyer, uint256 price, uint256 indexed tokenId, string uri);
+    event NFTRent(
+        address indexed lister,
+        address indexed renter,
+        uint256 totalPrice,
+        uint256 indexed tokenId,
+        string uri,
+        uint64 expiredAt
+    );
 
     Counters.Counter private _tokenIdCounter;
 
-    bytes32 private constant NFT_SALE_TYPE_HASH = keccak256("NFTForSale(address lister,uint256 price,string uri)");
+    bytes32 private constant NFT_SALE_TYPE_HASH =
+        keccak256("NFTForSale(address lister,uint256 price,string uri,uint256 nonce)");
 
     bytes32 private constant NFT_RENT_MINT_TYPE_HASH =
         keccak256(
-            "NFTForRentWithMint(address lister,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration,string uri)"
+            "NFTForRentWithMint(address lister,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration,string uri,uint256 nonce)"
         );
     bytes32 private constant NFT_RENT_TYPE_HASH =
         keccak256(
-            "NFTForRent(address lister,uint256 tokenId,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration)"
+            "NFTForRent(address lister,uint256 tokenId,uint256 pricePerUnit,uint64 timeUnit,uint64 minDuration,uint64 maxDuration,uint256 nonce)"
         );
+
+    mapping(bytes => bool) private usedSignature;
 
     constructor(
         string memory _name,
@@ -70,11 +80,14 @@ contract EstateContract is
         address lister,
         uint256 price,
         string memory uri,
+        uint256 nonce,
         bytes calldata signature
     ) external payable whenNotPaused {
         require(lister != to, "Invalid address");
-        require(_verify(lister, _hashNFTSale(lister, price, uri), signature), "Invalid signature");
+        require(_verify(lister, _hashNFTSale(lister, price, uri, nonce), signature), "Invalid/Used signature");
         require(msg.value >= price, "Insufficient balance");
+
+        usedSignature[signature] = true;
 
         uint256 _tokenId = _mintWithURI(to, uri);
 
@@ -92,6 +105,7 @@ contract EstateContract is
         uint64 minDuration,
         uint64 maxDuration,
         uint64 rentDuration,
+        uint256 nonce,
         bytes calldata signature
     ) external payable whenNotPaused {
         require(lister != to, "Invalid address");
@@ -99,10 +113,10 @@ contract EstateContract is
         require(
             _verify(
                 lister,
-                _hashNFTRent(lister, _tokenId, pricePerUnit, timeUnit, minDuration, maxDuration),
+                _hashNFTRent(lister, _tokenId, pricePerUnit, timeUnit, minDuration, maxDuration, nonce),
                 signature
             ),
-            "Invalid signature"
+            "Invalid/Used signature"
         );
         require(userOf(_tokenId) == address(0), "TokenId already rent out");
 
@@ -114,9 +128,11 @@ contract EstateContract is
         uint64 expiredAt = block.timestamp.toUint64() + rentDuration;
         setUser(_tokenId, to, expiredAt);
 
+        usedSignature[signature] = true;
+
         _transferWithRefund(lister, totalPrice);
 
-        emit NFTRent(lister, to, expiredAt, totalPrice, _tokenId, uri);
+        emit NFTRent(lister, to, totalPrice, _tokenId, uri, expiredAt);
     }
 
     function rentWithMint(
@@ -128,6 +144,7 @@ contract EstateContract is
         uint64 maxDuration,
         uint64 rentDuration,
         string memory uri,
+        uint256 nonce,
         bytes calldata signature
     ) external payable whenNotPaused {
         require(lister != to, "Invalid address");
@@ -135,10 +152,10 @@ contract EstateContract is
         require(
             _verify(
                 lister,
-                _hashNFTRentWithMint(lister, pricePerUnit, timeUnit, minDuration, maxDuration, uri),
+                _hashNFTRentWithMint(lister, pricePerUnit, timeUnit, minDuration, maxDuration, uri, nonce),
                 signature
             ),
-            "Invalid signature"
+            "Invalid/Used signature"
         );
 
         uint256 totalPrice = (pricePerUnit * rentDuration) / timeUnit;
@@ -153,13 +170,23 @@ contract EstateContract is
         info.user = to;
         info.expires = expiredAt;
 
+        usedSignature[signature] = true;
+
         _transferWithRefund(lister, totalPrice);
 
-        emit NFTRent(lister, to, expiredAt, totalPrice, _tokenId, uri);
+        emit NFTRent(lister, to, totalPrice, _tokenId, uri, expiredAt);
     }
 
-    function _hashNFTSale(address _lister, uint256 _price, string memory _uri) internal view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, keccak256(bytes(_uri)))));
+    function _hashNFTSale(
+        address _lister,
+        uint256 _price,
+        string memory _uri,
+        uint256 _nonce
+    ) internal view returns (bytes32) {
+        return
+            _hashTypedDataV4(
+                keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, keccak256(bytes(_uri)), _nonce))
+            );
     }
 
     function _hashNFTRent(
@@ -168,7 +195,8 @@ contract EstateContract is
         uint256 _pricePerUnit,
         uint64 _timeUnit,
         uint64 _minDuration,
-        uint64 _maxDuration
+        uint64 _maxDuration,
+        uint256 _nonce
     ) internal view returns (bytes32) {
         return
             _hashTypedDataV4(
@@ -180,7 +208,8 @@ contract EstateContract is
                         _pricePerUnit,
                         _timeUnit,
                         _minDuration,
-                        _maxDuration
+                        _maxDuration,
+                        _nonce
                     )
                 )
             );
@@ -192,7 +221,8 @@ contract EstateContract is
         uint64 _timeUnit,
         uint64 _minDuration,
         uint64 _maxDuration,
-        string memory _uri
+        string memory _uri,
+        uint256 _nonce
     ) internal view returns (bytes32) {
         return
             _hashTypedDataV4(
@@ -204,14 +234,15 @@ contract EstateContract is
                         _timeUnit,
                         _minDuration,
                         _maxDuration,
-                        keccak256(bytes(_uri))
+                        keccak256(bytes(_uri)),
+                        _nonce
                     )
                 )
             );
     }
 
     function _verify(address signer, bytes32 digest, bytes memory signature) internal view returns (bool) {
-        return SignatureChecker.isValidSignatureNow(signer, digest, signature);
+        return !usedSignature[signature] && SignatureChecker.isValidSignatureNow(signer, digest, signature);
     }
 
     function _mintWithURI(address to, string memory uri) internal returns (uint256) {
