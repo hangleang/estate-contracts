@@ -9,8 +9,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/common/ERC2981.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import "hardhat/console.sol";
 
 import "./extensions/ERC4907.sol";
 
@@ -182,11 +184,12 @@ contract EstateContract is
         uint256 _price,
         string memory _uri,
         uint256 _nonce
-    ) internal view returns (bytes32) {
-        return
-            _hashTypedDataV4(
-                keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, keccak256(bytes(_uri)), _nonce))
-            );
+    ) public view returns (bytes32) {
+        // return
+        //     _hashTypedDataV4(
+        //         keccak256(abi.encode(NFT_SALE_TYPE_HASH, _lister, _price, keccak256(bytes(_uri)), _nonce))
+        //     );
+        return keccak256(abi.encodePacked(_lister, _price, bytes(_uri), _nonce));
     }
 
     function _hashNFTRent(
@@ -197,21 +200,25 @@ contract EstateContract is
         uint64 _minDuration,
         uint64 _maxDuration,
         uint256 _nonce
-    ) internal view returns (bytes32) {
+    ) public view returns (bytes32) {
+        // return
+        //     _hashTypedDataV4(
+        //         keccak256(
+        //             abi.encode(
+        //                 NFT_RENT_TYPE_HASH,
+        //                 _lister,
+        //                 _tokenId,
+        //                 _pricePerUnit,
+        //                 _timeUnit,
+        //                 _minDuration,
+        //                 _maxDuration,
+        //                 _nonce
+        //             )
+        //         )
+        //     );
         return
-            _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        NFT_RENT_TYPE_HASH,
-                        _lister,
-                        _tokenId,
-                        _pricePerUnit,
-                        _timeUnit,
-                        _minDuration,
-                        _maxDuration,
-                        _nonce
-                    )
-                )
+            keccak256(
+                abi.encodePacked(_lister, _tokenId, _pricePerUnit, _timeUnit, _minDuration, _maxDuration, _nonce)
             );
     }
 
@@ -223,26 +230,39 @@ contract EstateContract is
         uint64 _maxDuration,
         string memory _uri,
         uint256 _nonce
-    ) internal view returns (bytes32) {
+    ) public view returns (bytes32) {
+        // return
+        //     _hashTypedDataV4(
+        //         keccak256(
+        //             abi.encode(
+        //                 NFT_RENT_MINT_TYPE_HASH,
+        //                 _lister,
+        //                 _pricePerUnit,
+        //                 _timeUnit,
+        //                 _minDuration,
+        //                 _maxDuration,
+        //                 keccak256(bytes(_uri)),
+        //                 _nonce
+        //             )
+        //         )
+        //     );
         return
-            _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        NFT_RENT_MINT_TYPE_HASH,
-                        _lister,
-                        _pricePerUnit,
-                        _timeUnit,
-                        _minDuration,
-                        _maxDuration,
-                        keccak256(bytes(_uri)),
-                        _nonce
-                    )
-                )
+            keccak256(
+                abi.encodePacked(_lister, _pricePerUnit, _timeUnit, _minDuration, _maxDuration, bytes(_uri), _nonce)
             );
     }
 
+    function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
+        /*
+        Signature is produced by signing a keccak256 hash with the following format:
+        "\x19Ethereum Signed Message\n" + len(msg) + msg
+        */
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash));
+    }
+
     function _verify(address signer, bytes32 digest, bytes memory signature) internal view returns (bool) {
-        return !usedSignature[signature] && SignatureChecker.isValidSignatureNow(signer, digest, signature);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(digest);
+        return !usedSignature[signature] && recoverSigner(ethSignedMessageHash, signature) == signer;
     }
 
     function _mintWithURI(address to, string memory uri) internal returns (uint256) {
@@ -289,5 +309,35 @@ contract EstateContract is
         bytes4 interfaceId
     ) public view override(ERC721, ERC4907, ERC2981, ERC721Enumerable) returns (bool) {
         return super.supportsInterface(interfaceId);
+    }
+
+    function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature) public pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            /*
+            First 32 bytes stores the length of the signature
+
+            add(sig, 32) = pointer of sig + 32
+            effectively, skips first 32 bytes of signature
+
+            mload(p) loads next 32 bytes starting at the memory address p into memory
+            */
+
+            // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+            // second 32 bytes
+            s := mload(add(sig, 64))
+            // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // implicitly return (r, s, v)
     }
 }

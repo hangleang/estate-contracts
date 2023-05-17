@@ -26,34 +26,37 @@ describe("Estate Contract testcase", function () {
         /**
          * Account[1] (lister) creates signature
          */
-        const nonce = await this.accounts[1].getTransactionCount("latest");
-        const signature = await this.accounts[1]._signTypedData(
-          // Domain
-          {
-            name: this.name,
-            version: "1.0.0",
-            chainId: this.chainId,
-            verifyingContract: this.estate.address,
-          },
-          // Types
-          {
-            NFTForSale: [
-              { name: "lister", type: "address" },
-              { name: "price", type: "uint256" },
-              { name: "uri", type: "string" },
-              { name: "nonce", type: "uint256" },
-            ],
-          },
-          // Value
-          { ...sale, lister: this.accounts[1].address, nonce },
-        );
+        // const nonce = await this.accounts[1].getTransactionCount("latest");
+        const dataHash = await this.estate._hashNFTSale(this.accounts[1].address, sale.price, sale.uri, idx);
+        const bytesDataHash = ethers.utils.arrayify(dataHash);
+        const signature = await this.accounts[1].signMessage(bytesDataHash);
+        // const signature = await this.accounts[1]._signTypedData(
+        //   // Domain
+        //   {
+        //     name: this.name,
+        //     version: "1.0.0",
+        //     chainId: this.chainId,
+        //     verifyingContract: this.estate.address,
+        //   },
+        //   // Types
+        //   {
+        //     NFTForSale: [
+        //       { name: "lister", type: "address" },
+        //       { name: "price", type: "uint256" },
+        //       { name: "uri", type: "string" },
+        //       { name: "nonce", type: "uint256" },
+        //     ],
+        //   },
+        //   // Value
+        //   { ...sale, lister: this.accounts[1].address, nonce: idx },
+        // );
         /**
          * Account[2] (buyer) buy the token using signature
          */
         await expect(
           this.estate
             .connect(this.accounts[2])
-            .sale(this.accounts[2].address, this.accounts[1].address, sale.price, sale.uri, nonce, signature, {
+            .sale(this.accounts[2].address, this.accounts[1].address, sale.price, sale.uri, idx, signature, {
               value: sale.price,
             }),
         )
@@ -74,26 +77,34 @@ describe("Estate Contract testcase", function () {
       // list sale #0
       this.firstSale = sales[0];
       this.firstSale.nonce = await this.accounts[1].getTransactionCount("latest");
-      this.firstSale.signature = await this.accounts[1]._signTypedData(
-        // Domain
-        {
-          name: this.name,
-          version: "1.0.0",
-          chainId: this.chainId,
-          verifyingContract: this.estate.address,
-        },
-        // Types
-        {
-          NFTForSale: [
-            { name: "lister", type: "address" },
-            { name: "price", type: "uint256" },
-            { name: "uri", type: "string" },
-            { name: "nonce", type: "uint256" },
-          ],
-        },
-        // Value
-        { ...this.firstSale, lister: this.accounts[1].address },
+      const dataHash = await this.estate._hashNFTSale(
+        this.accounts[1].address,
+        this.firstSale.price,
+        this.firstSale.uri,
+        this.firstSale.nonce,
       );
+      const bytesDataHash = ethers.utils.arrayify(dataHash);
+      this.firstSale.signature = await this.accounts[1].signMessage(bytesDataHash);
+      // this.firstSale.signature = await this.accounts[1]._signTypedData(
+      //   // Domain
+      //   {
+      //     name: this.name,
+      //     version: "1.0.0",
+      //     chainId: this.chainId,
+      //     verifyingContract: this.estate.address,
+      //   },
+      //   // Types
+      //   {
+      //     NFTForSale: [
+      //       { name: "lister", type: "address" },
+      //       { name: "price", type: "uint256" },
+      //       { name: "uri", type: "string" },
+      //       { name: "nonce", type: "uint256" },
+      //     ],
+      //   },
+      //   // Value
+      //   { ...this.firstSale, lister: this.accounts[1].address },
+      // );
     });
 
     it("mint once - success", async function () {
@@ -141,40 +152,51 @@ describe("Estate Contract testcase", function () {
 
     rental.forEach((rent, idx) => {
       it("element", async function () {
-        const { rentDuration, ...rentInfo } = rent;
+        // const { rentDuration, ...rentInfo } = rent;
         /**
          * Account[1] (lister) creates signature
          */
-        const nonce = await this.accounts[1].getTransactionCount("latest");
-        const signature = await this.accounts[1]._signTypedData(
-          // Domain
-          {
-            name: this.name,
-            version: "1.0.0",
-            chainId: this.chainId,
-            verifyingContract: this.estate.address,
-          },
-          // Types
-          {
-            NFTForRentWithMint: [
-              { name: "lister", type: "address" },
-              { name: "pricePerUnit", type: "uint256" },
-              { name: "timeUnit", type: "uint64" },
-              { name: "minDuration", type: "uint64" },
-              { name: "maxDuration", type: "uint64" },
-              { name: "uri", type: "string" },
-              { name: "nonce", type: "uint256" },
-            ],
-          },
-          // Value
-          { ...rentInfo, lister: this.accounts[1].address, nonce },
+        // const nonce = await this.accounts[1].getTransactionCount("latest");
+        const dataHash = await this.estate._hashNFTRentWithMint(
+          this.accounts[1].address,
+          rent.pricePerUnit,
+          rent.timeUnit,
+          rent.minDuration,
+          rent.maxDuration,
+          rent.uri,
+          idx,
         );
+        const bytesDataHash = ethers.utils.arrayify(dataHash);
+        const signature = await this.accounts[1].signMessage(bytesDataHash);
+        // const signature = await this.accounts[1]._signTypedData(
+        //   // Domain
+        //   {
+        //     name: this.name,
+        //     version: "1.0.0",
+        //     chainId: this.chainId,
+        //     verifyingContract: this.estate.address,
+        //   },
+        //   // Types
+        //   {
+        //     NFTForRentWithMint: [
+        //       { name: "lister", type: "address" },
+        //       { name: "pricePerUnit", type: "uint256" },
+        //       { name: "timeUnit", type: "uint64" },
+        //       { name: "minDuration", type: "uint64" },
+        //       { name: "maxDuration", type: "uint64" },
+        //       { name: "uri", type: "string" },
+        //       { name: "nonce", type: "uint256" },
+        //     ],
+        //   },
+        //   // Value
+        //   { ...rentInfo, lister: this.accounts[1].address, idx },
+        // );
         /**
          * Account[2] (renter) rent the token using signature
          */
         const totalPrice = ethers.BigNumber.from(rent.pricePerUnit).mul(rent.rentDuration).div(rent.timeUnit);
         const expiredAt = ethers.BigNumber.from(await time.latest())
-          .add(rentDuration)
+          .add(rent.rentDuration)
           .add(1);
         await expect(
           this.estate
@@ -186,9 +208,9 @@ describe("Estate Contract testcase", function () {
               rent.timeUnit,
               rent.minDuration,
               rent.maxDuration,
-              rentDuration,
+              rent.rentDuration,
               rent.uri,
-              nonce,
+              idx,
               signature,
               {
                 value: totalPrice,
@@ -215,30 +237,41 @@ describe("Estate Contract testcase", function () {
       this.firstRent.nonce = await this.accounts[1].getTransactionCount("latest");
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { rentDuration, ...rentInfo } = this.firstRent;
-      this.firstRent.signature = await this.accounts[1]._signTypedData(
-        // Domain
-        {
-          name: this.name,
-          version: "1.0.0",
-          chainId: this.chainId,
-          verifyingContract: this.estate.address,
-        },
-        // Types
-        {
-          NFTForRentWithMint: [
-            { name: "lister", type: "address" },
-            { name: "pricePerUnit", type: "uint256" },
-            { name: "timeUnit", type: "uint64" },
-            { name: "minDuration", type: "uint64" },
-            { name: "maxDuration", type: "uint64" },
-            { name: "uri", type: "string" },
-            { name: "nonce", type: "uint256" },
-          ],
-        },
-        // Value
-        { ...rentInfo, lister: this.accounts[1].address },
+      // const { rentDuration, ...rentInfo } = this.firstRent;
+      const dataHash = await this.estate._hashNFTRentWithMint(
+        this.accounts[1].address,
+        this.firstRent.pricePerUnit,
+        this.firstRent.timeUnit,
+        this.firstRent.minDuration,
+        this.firstRent.maxDuration,
+        this.firstRent.uri,
+        this.firstRent.nonce,
       );
+      const bytesDataHash = ethers.utils.arrayify(dataHash);
+      this.firstRent.signature = await this.accounts[1].signMessage(bytesDataHash);
+      // this.firstRent.signature = await this.accounts[1]._signTypedData(
+      //   // Domain
+      //   {
+      //     name: this.name,
+      //     version: "1.0.0",
+      //     chainId: this.chainId,
+      //     verifyingContract: this.estate.address,
+      //   },
+      //   // Types
+      //   {
+      //     NFTForRentWithMint: [
+      //       { name: "lister", type: "address" },
+      //       { name: "pricePerUnit", type: "uint256" },
+      //       { name: "timeUnit", type: "uint64" },
+      //       { name: "minDuration", type: "uint64" },
+      //       { name: "maxDuration", type: "uint64" },
+      //       { name: "uri", type: "string" },
+      //       { name: "nonce", type: "uint256" },
+      //     ],
+      //   },
+      //   // Value
+      //   { ...rentInfo, lister: this.accounts[1].address },
+      // );
     });
 
     it("mint with wrong signer - failure", async function () {
